@@ -363,11 +363,11 @@ def get_dataset(args, dataset_split, transform_split, use_preprocess=None):
 
     dataset_split = "valid" if (dataset_split == "val") else dataset_split
     if dataset in ['covid','covid_ssl']:
-        root = '../LWBC/SSL/COVID/'
+        root = 'dataset/COVID/'
         assert shortcut_type not in ['LO','Male','Female','Age','Race']
         dataset = COVIDDataset(root=root, split=dataset_split, shortcut_skew = percent, shortcut_type=shortcut_type, transform = transform, ssl_type=ssl_type, ssl_ckpt_path=ssl_ckpt_path ,use_bias_label=args.use_bias_label)
     elif dataset in ['mimic','mimic_ssl']:
-        root = f"../LWBC/SSL/MIMIC"
+        root = f"dataset/MIMIC"
         dataset = MimicDataset(root=root, split=dataset_split, shortcut_skew = percent, shortcut_type=shortcut_type, group_type=group_type, transform = transform, ssl_type=ssl_type, ssl_ckpt_path=ssl_ckpt_path ,use_bias_label=args.use_bias_label)
     else:
         print('wrong dataset ...')

@@ -89,11 +89,14 @@ def covid_conversion(shortcut_type, shortcut_skew):
         print(f"{covid_root} exists!")
 
     for split in ['val', 'train', 'test']:
-        path_list = glob(f'covid_dataset/{split}/*/*.png')
+        path_list = glob(f'dataset/covid_dataset/{split}/*/*.png')
+        print('len ',len(path_list) )
         labels = [int(Path(p).parent.name) for p in path_list]
         shortcut_labels = make_attr_labels(torch.tensor(labels), 1 - shortcut_skew).tolist()
 
         for idx, path in tqdm(enumerate(path_list), total=len(path_list)):
+            if idx==100:
+                break
             path = Path(path)
             prefix = int(path.stem.split('-')[1])
             label, s_label = str(labels[idx]), shortcut_labels[idx]
@@ -129,7 +132,7 @@ def mimic_conversion(shortcut_type, shortcut_skew):
     for split in ['val', 'train', 'test']:
         split_ = 'valid' if split == 'val' else split
         dataset = TFRecordDataset(f'mimic_dataset/mimic_{split_}_v5.tfrecords',
-                                  index_path=None, description=description)
+                                index_path=None, description=description)
 
         labels = [info['Disease'][0] for info in dataset]
         shortcut_labels = make_attr_labels(torch.tensor(labels), 1 - shortcut_skew).tolist()
@@ -144,10 +147,12 @@ def mimic_conversion(shortcut_type, shortcut_skew):
                 shutil.copy(path, target)
 
         cnt = {}
-        for i, info in tqdm(enumerate(dataset), total=len(dataset)):
+        for i, info in tqdm(enumerate(dataset), total=len(labels)):
+            if i == 100:
+                break
             label, s_label = info['Disease'][0], shortcut_labels[i]
             cnt[label] = cnt.get(label, 0) + 1
-            name = f"{info['subject_id'][0]}-{info['study_id'][0]}"
+            name = f"{info['subject_id'][0]}_{info['study_id'][0]}"
 
             save_name = f"{name}_{label}_{0 if shortcut_type == 'LO' else s_label}"
             save_path = mimic_root / split / str(label) / f'{save_name}.png'
