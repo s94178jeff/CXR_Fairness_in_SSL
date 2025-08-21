@@ -17,8 +17,8 @@ import random
 from importlib.machinery import SourceFileLoader
 from ssl_inference import get_epoch, get_aug
 softmax = nn.Softmax(dim=1)
-from sklearn.metrics import roc_auc_score
-from util import GROUP_LIST_,GROUP_LIST,METHOD_LIST,MATRIX_LIST,BIAS_LABEL_LIST,RESULT_ITEM
+from util import GROUP_LIST_,GROUP_LIST,METHOD_LIST,MATRIX_LIST,BIAS_LABEL_LIST,RESULT_ITEM, torch_safe_save, get_device, safe_roc_auc_score
+from pathlib import Path
 
 class Learner(object):
     def __init__(self, args):
@@ -80,7 +80,8 @@ class Learner(object):
         print(f'working with experiment: {run_name_title}...')
 
         self.log_dir = os.makedirs(join(args.log_dir, args.dataset, run_name), exist_ok=True)
-        self.device = torch.device(args.device)
+        self.device = get_device(args)
+        print(f"Using device: {self.device}")
         self.args = args
 
         print(self.args)
@@ -300,7 +301,7 @@ class Learner(object):
             state_dict[f'best_valid_acc'] = self.best_valid_acc
             state_dict[f'best_test_acc'] = self.best_test_acc
         with open(model_path, "wb") as f:
-            torch.save(state_dict, f)
+            torch_safe_save(state_dict,f)
         print(f'{step} model saved ...')
 
     def board_vanilla_loss(self, step, loss):
@@ -320,7 +321,7 @@ class Learner(object):
             val_accs,val_fair,_,(val_cat_label,val_cat_pred,val_cat_prob) = self.evaluate_fair(self.model, self.valid_loader,shortcut,group,self.valid_flip_loader)
         else:
             val_accs,val_fair,val_pair_info,(val_cat_label,val_cat_pred,val_cat_prob) = self.evaluate_fair(self.model, self.valid_loader,shortcut,group)
-        val_auc = roc_auc_score(val_cat_label, val_cat_prob,multi_class='ovr',labels=[0,1,2,3])
+        val_auc = safe_roc_auc_score(val_cat_label, val_cat_prob,multi_class='ovr',labels=[0,1,2,3])
         result = get_old_result(self.result_dir)
         
         result['val_acc'] = val_accs
@@ -335,11 +336,11 @@ class Learner(object):
                 test_accs,test_fair,_,(test_cat_label,_,test_cat_prob) = self.evaluate_fair(self.model, self.test_loader,shortcut,group,self.test_flip_loader,split='test')
             else:
                 test_accs,test_fair,test_pair_info,(test_cat_label,_,test_cat_prob) = self.evaluate_fair(self.model, self.test_loader,shortcut,group,split='test')
-            test_auc = roc_auc_score(test_cat_label, test_cat_prob,multi_class='ovr',labels=[0,1,2,3])
+            test_auc = safe_roc_auc_score(test_cat_label, test_cat_prob,multi_class='ovr',labels=[0,1,2,3])
             if shortcut == 'LO' or group == 'LO':
                 test_auc_list = []
                 for class_idx in range(4):
-                    test_auc_list.append(roc_auc_score(test_cat_label==class_idx, test_cat_prob[:,class_idx]))
+                    test_auc_list.append(safe_roc_auc_score(test_cat_label==class_idx, test_cat_prob[:,class_idx]))
                 result['test_auc_apart'] = test_auc_list
             result['test_acc'] = test_accs
             result['test_auc'] = test_auc
@@ -378,9 +379,9 @@ class Learner(object):
         else:
             tn = ''
         if self.num_classes == 2 :
-            val_auc = roc_auc_score(val_attr, val_prob[:,1])
+            val_auc = safe_roc_auc_score(val_attr, val_prob[:,1])
         else:
-            val_auc = roc_auc_score(val_attr, val_prob,multi_class='ovr',labels=list(range(self.num_classes)))
+            val_auc = safe_roc_auc_score(val_attr, val_prob,multi_class='ovr',labels=list(range(self.num_classes)))
         result = get_old_result(self.result_dir)
         result[f'{tn}val_acc'] = val_accs
         result[f'{tn}val_auc'] = val_auc
@@ -390,9 +391,9 @@ class Learner(object):
             else:
                 test_accs,(test_attr,test_pred,test_prob) = self.evaluate(self.model, self.test_loader)
             if self.num_classes == 2 :
-                test_auc = roc_auc_score(test_attr, test_prob[:,1])
+                test_auc = safe_roc_auc_score(test_attr, test_prob[:,1])
             else:
-                test_auc = roc_auc_score(test_attr, test_prob,multi_class='ovr',labels=list(range(self.num_classes)))
+                test_auc = safe_roc_auc_score(test_attr, test_prob,multi_class='ovr',labels=list(range(self.num_classes)))
             result[f'{tn}test_acc'] = test_accs
             result[f'{tn}test_auc'] = test_auc
             save_result(result,self.result_dir)
@@ -407,7 +408,7 @@ class Learner(object):
                 f"auc/{tn}best_valid": self.best_val_auc,
             },step)
         #metric val auc
-        if val_auc >= self.best_val_auc:
+        if val_auc >= self.best_val_auc or self.best_val_auc==None:
             self.best_val_auc = val_auc
             self.best_valid_acc = val_accs
             write_out_cm(self,f"best_{tn}val_conf_mat",val_attr,val_pred) 
@@ -462,11 +463,11 @@ class Learner(object):
             model = self.knn
         pred = model.predict(features)
         prob = model.predict_proba(features)
-        #auc = roc_auc_score(labels, prob,multi_class='ovr',labels=[0,1,2,3])
+        #auc = safe_roc_auc_score(labels, prob,multi_class='ovr',labels=[0,1,2,3])
         if self.num_classes == 2 :
-            auc = roc_auc_score(labels, prob[:,1])
+            auc = safe_roc_auc_score(labels, prob[:,1])
         else:
-            auc = roc_auc_score(labels, prob,multi_class='ovr',labels=list(range(self.num_classes)))
+            auc = safe_roc_auc_score(labels, prob,multi_class='ovr',labels=list(range(self.num_classes)))
         acc = model.score(features, labels)
         self.result[f'{model_name}_{tn}{split}_acc'] = acc
         self.result[f'{model_name}_{tn}{split}_auc'] = auc
@@ -524,8 +525,8 @@ class Learner(object):
         train_iter = iter(self.train_loader)
         train_num = len(self.train_dataset.dataset)
         epoch, cnt = 0, 0
-        tmp_fname = f'tmp/tmp{random.randint(0,100000)}.pth.tar'
-        torch.save({'state_dict':self.model.state_dict()},tmp_fname)
+        tmp_fname = Path("tmp") / f'tmp{random.randint(0,100000)}.pth.tar'
+        torch_safe_save({'state_dict': self.model.state_dict()}, tmp_fname)
         for step in tqdm(range(start_step,args.num_steps), leave=False):
             self.model.train()
             try:

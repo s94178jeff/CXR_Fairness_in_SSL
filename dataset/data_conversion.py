@@ -10,7 +10,7 @@ import argparse
 from pathlib import Path
 
 import util
-from .protocols import (
+from dataset.protocols import (
     make_attr_labels,
     gen_mimic_shortcut,
     gen_covid_shortcut,

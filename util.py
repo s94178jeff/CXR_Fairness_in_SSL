@@ -4,9 +4,10 @@ import torch
 import numpy as np
 import torch.nn as nn
 import os
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, roc_auc_score
 from itertools import combinations
 import json
+from pathlib import Path
 softmax = nn.Softmax(dim=1)
 GROUP_LIST = ['age','race','gender']
 GROUP_LIST_ = ['age','race','gender','LO']
@@ -43,39 +44,7 @@ class EMA:
     def max_loss(self, label):
         label_index = torch.where(self.label == label)[0]
         return self.parameter[label_index].max()
-    
-class conf_EMA:
-    def __init__(self, label, num_classes, alpha=0.9):
-        self.label = label
-        self.alpha = alpha
-        self.parameter = torch.zeros(label.size(0),num_classes)
-        self.updated = torch.zeros(label.size(0))
-        self.num_classes = num_classes
-        self.max = torch.zeros(self.num_classes).cuda()
 
-    def update(self, data, index):
-        self.parameter = self.parameter.to(data.device)
-        self.updated = self.updated.to(data.device)
-        index = index.to(data.device)
-        #print(self.parameter.shape)
-        #print(data.shape)
-        #print(self.parameter[index].shape)
-        self.parameter[index] = self.alpha * self.parameter[index] +( (1 - self.alpha * self.updated[index])* data.permute(1,0) ).permute(1,0)
-        #self.parameter[index] = self.alpha * self.parameter[index] + (1 - self.alpha * self.updated[index]) * data
-        self.updated[index] = 1
-
-class TwoTransform:
-    """Take two random crops of one image as the query and key."""
-
-    def __init__(self, transform1,transform2):
-        self.transform1 = transform1
-        self.transform2 = transform2
-
-    def __call__(self, x):
-        q = self.transform1(x)
-        k = self.transform2(x)
-        return [q, k]
-    
 def join(*kwawrg):
     return os.path.join(*kwawrg)
 
@@ -134,9 +103,9 @@ def get_feature_num(ssl_type,ssl_ckpt_path,use_bias_label):
 
 def get_tpr_fpr(label,pred):
 
-    tn, fp, fn, tp = confusion_matrix(label,pred,labels=[0,1]).ravel()
-    tpr = tp / (tp + fn)
-    fpr = fp / (tn + fp)
+    tn, fp, fn, tp = confusion_matrix(label, pred, labels=[0, 1]).ravel()
+    tpr = tp / (tp + fn) if (tp + fn) != 0 else 0.0
+    fpr = fp / (tn + fp) if (tn + fp) != 0 else 0.0
     return tpr,fpr
 
 def cal_img_bias_fairness(labels,preds,flip_preds,num_class,flip_size):
@@ -242,6 +211,47 @@ def save_result(result,result_dir):
     with open(result_path, "w") as outfile:
         json.dump(result, outfile,indent=4,sort_keys=True)
 
+def torch_safe_save(obj, path):
+    """確保存檔時路徑存在"""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)  # 建立資料夾（含父層）
+    torch.save(obj, path)
+
+def get_device(args):
+    if getattr(args, "device", None) is None:
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            return torch.device("mps")
+        else:
+            return torch.device("cpu")
+    else:
+        return torch.device(args.device)
+    
+def safe_roc_auc_score(y_true, y_score, default=0.5, **kwargs):
+
+    y_true = np.asarray(y_true)
+    y_score = np.asarray(y_score)
+
+    # 檢查 y_true 單一類別
+    if len(np.unique(y_true)) < 2:
+        return default
+
+    # 檢查 y_score 全部相同
+    if np.all(y_score == y_score[0]):
+        return default
+
+    # 檢查 NaN 或 inf
+    if np.any(np.isnan(y_true)) or np.any(np.isnan(y_score)):
+        return default
+    if np.any(np.isinf(y_true)) or np.any(np.isinf(y_score)):
+        return default
+
+    # 嘗試計算
+    try:
+        return roc_auc_score(y_true, y_score, **kwargs)
+    except:
+        return default
 def check_retrain(log_path,continue_train):
     if os.path.exists(log_path) and not continue_train:
         user_input = input(f'Do you want to re-train model in {log_path} (yes/no) :')

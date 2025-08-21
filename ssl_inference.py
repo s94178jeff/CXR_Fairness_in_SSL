@@ -20,7 +20,7 @@ DINOHead = vision_transformer.DINOHead
 vits = vision_transformer
 import torch.nn as nn
 import random
-
+from util import torch_safe_save
 def sample_unlabelled_images(bz,size):
     return torch.randn(bz, 1, size, size)
 
@@ -303,8 +303,8 @@ def generate_feature(dataset,img_path_list,ssl_ckpt_path,ssl_type,shortcut_type,
     
     encoder = get_encoder(ssl_type,ssl_ckpt_path).eval().cuda()
     
-    tmp_fname = f'tmp/tmp{random.randint(0,100000)}.pth.tar'
-    torch.save(encoder.state_dict(),tmp_fname)
+    tmp_fname = Path("tmp") / f'tmp{random.randint(0,100000)}.pth.tar'
+    torch_safe_save(encoder.state_dict(), tmp_fname)
     
     flip_size = 3
 

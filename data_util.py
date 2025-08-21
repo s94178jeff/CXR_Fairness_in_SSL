@@ -1,5 +1,3 @@
-'''Modified from https://github.com/alinlab/LfF/blob/master/data/util.py'''
-
 import os
 import torch
 from torch.utils.data.dataset import Dataset, Subset
@@ -17,16 +15,9 @@ import wandb
 from wandb import plot
 from tqdm import tqdm
 import random
-#util_fl = SourceFileLoader("util","C:/HMILab/Learning_Debiased_Disentangled/util.py").load_module()
-#join = util_fl.join
-#exists = util_fl.exists
-from util import join, exists
-#ssl_fl = SourceFileLoader("ssl_inference","C:/HMILab/LWBC/SSL/ssl_inference.py").load_module()
+from util import join, exists, torch_safe_save
 from ssl_inference import get_byol_encoder, get_simsiam_encoder, generate_feature, gen_flip_path_list, get_epoch
-#data_conversion_fl = SourceFileLoader("data_conversion","C:/HMILab/LWBC/SSL/data_conversion.py").load_module()
 from dataset.data_conversion import covid_conversion, mimic_conversion
-#covid_conversion = data_conversion_fl.covid_conversion
-#mimic_conversion = data_conversion_fl.mimic_conversion
 
 IMAGE_SHORTCUT_TYPE = ['mark','lightness','contrast','jpeg']
 
@@ -199,8 +190,8 @@ def gen_hook_feature(dataset,img_path_list,shortcut_type,shortcut_skew,transform
         return feature_fname, flip_feature_fname
     
     model = get_vanilla_model(dataset,shortcut_type,shortcut_skew).eval().cuda()
-    tmp_fname = f'tmp/tmp{random.randint(0,100000)}.pth.tar'
-    torch.save(model.state_dict(),tmp_fname)
+    tmp_fname = Path("tmp") / f'tmp{random.randint(0,100000)}.pth.tar'
+    torch_safe_save(model.state_dict(), tmp_fname)
     flip_size = 3
     feature = batch_hook_feature(model,img_path_list,transforms)
     np.save(feature_fname,feature)

@@ -10,7 +10,7 @@ def get_parser():
     parser.add_argument("--momentum",help='momentum',default=0.9, type=float)
     parser.add_argument("--num_workers", help="workers number", default=1, type=int)
     parser.add_argument("--exp", help='experiment name', default='', type=str)
-    parser.add_argument("--device", help="cuda or cpu", default='cpu', type=str)
+    parser.add_argument("--device", help="cuda or cpu", default=None, type=str)
     
     parser.add_argument("--dataset", help="data to train",choices=['mimic','mimic_ssl','covid','covid_ssl'], default= 'mimic', type=str)
 
