@@ -1,0 +1,103 @@
+wandb
+dataset/COVID/
+dataset/MIMIC/
+dataset/covid_dataset/
+dataset/mimic_dataset/
+log/
+
+# =====================
+# macOS 系統檔案
+# =====================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# =====================
+# Python
+# =====================
+# byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+*.whl
+
+# PyInstaller
+# 產生可執行檔時生成的臨時檔
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+pytest_cache/
+
+# PyCharm / VSCode / IDE
+.idea/
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment
+.env
+.venv/
+env/
+venv/
+ENV/
+
+# =====================
+# PyTorch / ML
+# =====================
+# 避免將 dataset 或輸出檔加入版本控制
+data/
+outputs/
+checkpoints/
+logs/
+*.pt
+*.pth
+
+# =====================
+# Others
+# =====================
+*.log
+*.tmp
+*.swp

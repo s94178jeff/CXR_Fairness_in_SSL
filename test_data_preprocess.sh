@@ -1,0 +1,1 @@
+python -m dataset.data_conversion --dataset covid --shortcut mark --skew 0.01
