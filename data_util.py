@@ -9,18 +9,18 @@ from glob import glob
 import numpy as np
 from PIL import Image,ImageFilter
 import json
-import dataset.protocols.shortcut_util as shortcut_util# shortcut_util = SourceFileLoader("util","dataset/protocols/shortcut_util.py").load_module()
-gen_mimic_shortcut = shortcut_util.gen_mimic_shortcut
-import wandb
-from wandb import plot
 from tqdm import tqdm
 import random
-from util import join, exists, torch_safe_save
-from ssl_inference import get_byol_encoder, get_simsiam_encoder, generate_feature, gen_flip_path_list, get_epoch
+from util import join, exists, torch_safe_save, get_device
+from ssl_inference import generate_feature, gen_flip_path_list
 from dataset.data_conversion import covid_conversion, mimic_conversion
+from module.util import get_vanilla_model
+from pathlib import Path
 
-IMAGE_SHORTCUT_TYPE = ['mark','lightness','contrast','jpeg']
-
+from dataset.protocols import (
+    gen_mimic_shortcut,
+    IMAGE_SHORTCUT_TYPE
+)
 class IdxDataset(Dataset):
     def __init__(self, dataset):
         self.dataset = dataset
@@ -30,24 +30,6 @@ class IdxDataset(Dataset):
 
     def __getitem__(self, idx):
         return (idx, *self.dataset[idx])
-
-class ZippedDataset(Dataset):
-    def __init__(self, datasets):
-        super(ZippedDataset, self).__init__()
-        self.dataset_sizes = [len(d) for d in datasets]
-        self.datasets = datasets
-
-    def __len__(self):
-        return max(self.dataset_sizes)
-
-    def __getitem__(self, idx):
-        items = []
-        for dataset_idx, dataset_size in enumerate(self.dataset_sizes):
-            items.append(self.datasets[dataset_idx][idx % dataset_size])
-
-        item = [torch.stack(tensors, dim=0) for tensors in zip(*items)]
-
-        return item
 
 class MimicDataset(Dataset):
     def __init__(self,root,split,transform,shortcut_skew,shortcut_type='no',group_type='no',ssl_ckpt_path='',ssl_type='',use_bias_label=False):
@@ -65,7 +47,6 @@ class MimicDataset(Dataset):
             mimic_conversion(shortcut_type,shortcut_skew)
         self.data = glob(join(root,f'{shortcut_type}{shortcut_skew}',split)+'/*/*')
         self.length = len(self.data)
-        print(self.length)
         if self.use_ssl:
             self.feature, self.flip_feature = handle_feature('mimic',self.data,ssl_ckpt_path,ssl_type,shortcut_type,shortcut_skew,transform,self.split,use_bias_label)
             print(self.feature.shape)
@@ -74,65 +55,56 @@ class MimicDataset(Dataset):
         self.demo_info = {}
         if shortcut_type != 'LO':
             f_name = self.split.replace('_flip','')
-            with open(f'dataset/mimic/{f_name}/summary.json') as load_file:
+            with open(f'dataset/mimic_dataset/{f_name}/summary.json') as load_file:
                 self.demo_info = json.load(load_file)
-            print(len(list(self.demo_info.keys())))
 
     def __len__(self):
         return self.length
 
-    def gen_image(self, path, name):
-
-        shortcut_label = int(path.split('_')[-1].split('.')[0])
-        if self.shortcut_type in ['LO','Male','Female','Race','Age','jpeg'] or self.group_type == 'LO':
-            image = Image.open(path)
-        else:
-            image = np.load(f'dataset/mimic/{self.split}/{name}.npy')
-            image = gen_mimic_shortcut('v5',self.shortcut_type,image,shortcut_label)
-            image = Image.fromarray(np.uint8(image[0]),'L')
-        
-        return self.transform(image)
+    def gen_image(self, path):
+        return self.transform(Image.open(path))
     
-    def handle_all_single_feature(self,index,name):
-
+    def handle_all_single_feature(self,index):
+        print('use ssl' , self.use_ssl, self.data[index])
         if self.use_ssl:
             feature = self.feature[index]
             flip_feature = self.feature[index]
             if self.split!='train' and self.shortcut_type in IMAGE_SHORTCUT_TYPE and not self.use_bias_label:
                 flip_feature = self.flip_feature[:,index]
         else:
-            feature = self.gen_image(self.data[index],name)
+            feature = self.gen_image(self.data[index])
             if self.split!='train' and self.shortcut_type in IMAGE_SHORTCUT_TYPE and not self.use_bias_label:
                 flip_feature = torch.zeros((0,feature.shape[0],feature.shape[1],feature.shape[2]))
                 for i in range(3):
-                    _flip_feature = self.gen_image(self.flip_path_list[i][index],name)
-                    flip_feature = torch.cat((flip_feature,_flip_feature.unsqueeze(0)))        
+                    _flip_feature = self.gen_image(self.flip_path_list[i][index])
+                    flip_feature = torch.cat((flip_feature,_flip_feature.unsqueeze(0)))      
             else:
                 flip_feature = torch.zeros_like(feature)
 
         return feature,flip_feature
     
     def __getitem__(self, index):
-        label = int(self.data[index].split('_')[-2])
-        bias_label = int(self.data[index].split('_')[-1].split('.')[0])
-        name = self.data[index].rsplit('_',2)[0].split('\\')[-1].replace('-','_')
+        stem = Path(self.data[index]).stem
+        name, label, bias_label = stem.rsplit('_',2)
+        print(name, label, bias_label)
         assert name in self.demo_info.keys() or self.shortcut_type=='LO' or self.group_type=='LO'
-        feature,flip_feature = self.handle_all_single_feature(index,name)
+        feature,flip_feature = self.handle_all_single_feature(index)
         attr = torch.LongTensor([label,bias_label]) if self.group_type in ['no','LO'] else torch.LongTensor([label,self.demo_info[name][self.group_type]])
         
         return feature, attr, flip_feature
 
 def get_dataset_feature(args,split):
 
-    root = f'../LWBC/SSL/{args.dataset.split("_")[0].upper()}/'
+    root = f'dataset/{args.dataset.split("_")[0].upper()}/'
     split_ = split.replace('valid','val')
 
     paths = glob(join(root,f'{args.shortcut_type}{args.percent}',split_)+'/*/*_*_*')
     assert paths != 0
-    print(len(paths))
     attrs = [np.array([int(path.split('_')[-2])]) for path in paths ]
+    print(f"dataset/mimic_dataset/{split.replace('_flip','')}/summary.json")
     if args.dataset.split("_")[0] == 'mimic' and args.group_type != 'no':
-        with open(f"dataset/mimic/{split.replace('_flip','')}/summary.json") as load_file:
+        print(f"dataset/mimic_dataset/{split.replace('_flip','')}/summary.json")
+        with open(f"dataset/mimic_dataset/{split.replace('_flip','')}/summary.json") as load_file:
             demo_info = json.load(load_file)
         attrs = [np.array([int(path.split('_')[-2]),int(demo_info[path.split('_')[-3].split('\\')[-1].replace('-','_')][args.group_type])]) for path in paths ]
     transform_split = 'val_test' if split!='train' else 'train'
@@ -144,17 +116,6 @@ def concat_dummy(z):
     def hook(model, input, output):
         z.append(output)
     return hook
-
-def get_vanilla_model(dataset,shortcut_type,shortcut_skew):
-
-    ckpt_path = os.path.join('log',dataset,f'{shortcut_type}{shortcut_skew}_vanilla','result','best_model.th')
-    print(ckpt_path)
-    assert os.path.exists(ckpt_path)
-    model = models.__dict__['resnet18'](num_classes=4)
-    model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-    model.load_state_dict(torch.load(ckpt_path)['state_dict'] )
-
-    return model
 
 def batch_hook_feature(model,img_path_list,transforms,bz = 32):
     cnt = 0
@@ -168,9 +129,8 @@ def batch_hook_feature(model,img_path_list,transforms,bz = 32):
         cnt += 1
         if cnt == bz or index == length - 1:
             f = []
-            tmp = model(cat_img.cuda())
             hook_fn = model.avgpool.register_forward_hook(concat_dummy(f))
-            _ = model(cat_img.cuda())
+            _ = model(cat_img.to(get_device()))
             hook_fn.remove()
             feature = f[0][:,:,0,0].cpu().detach().numpy()
             cat_feature = np.concatenate((cat_feature,feature),0) if flag else feature
@@ -178,9 +138,31 @@ def batch_hook_feature(model,img_path_list,transforms,bz = 32):
             cnt = 0
     return cat_feature
 
+def batch_hook_feature(model, img_path_list, transforms, bz=32, return_numpy=True):
+    features = []
+    batch_imgs = []
+    f = []
+    hook_fn = model.avgpool.register_forward_hook(concat_dummy(f))
+
+    with torch.no_grad():
+        for index, path in enumerate(tqdm(img_path_list)):
+            img = Image.open(path).convert("RGB")
+            img = transforms(img).unsqueeze(0)
+            batch_imgs.append(img)
+            if len(batch_imgs) == bz or index == len(img_path_list) - 1:
+                cat_img = torch.cat(batch_imgs, 0).to(get_device())
+                _ = model(cat_img)
+                batch_feat = f[0][:, :, 0, 0].cpu()  # (B, C)
+                features.append(batch_feat)
+                f.clear()
+                batch_imgs = []
+    hook_fn.remove()
+    features = torch.cat(features, 0)  # (N, C)
+    return features.numpy() if return_numpy else features
+
 def gen_hook_feature(dataset,img_path_list,shortcut_type,shortcut_skew,transforms,split):
 
-    feature_dir = f'../LWBC/npy_files/{dataset}/vanilla/{shortcut_type}{shortcut_skew}'
+    feature_dir = f'feature/vanilla_hook_feature/{dataset}/{shortcut_type}{shortcut_skew}'
     if not os.path.exists(feature_dir):
         os.makedirs(feature_dir)
     feature_fname = os.path.join(feature_dir,f'{split}_features.npy')
@@ -189,12 +171,14 @@ def gen_hook_feature(dataset,img_path_list,shortcut_type,shortcut_skew,transform
         print(feature_fname)
         return feature_fname, flip_feature_fname
     
-    model = get_vanilla_model(dataset,shortcut_type,shortcut_skew).eval().cuda()
+    model = get_vanilla_model(dataset,shortcut_type,shortcut_skew).eval()
+    model = model.to(get_device())
     tmp_fname = Path("tmp") / f'tmp{random.randint(0,100000)}.pth.tar'
     torch_safe_save(model.state_dict(), tmp_fname)
     flip_size = 3
     feature = batch_hook_feature(model,img_path_list,transforms)
     np.save(feature_fname,feature)
+    print('gen dataset hook feature done')
     if split not in ['train','val_flip','test_flip'] and shortcut_type not in ['no','LO','Male','Female','Age','Race']:
         
         flip_path_list = gen_flip_path_list(img_path_list,flip_size=flip_size)
@@ -203,6 +187,7 @@ def gen_hook_feature(dataset,img_path_list,shortcut_type,shortcut_skew,transform
             flip_feature_ = batch_hook_feature(model,flip_path_list[i],transforms)
             flip_feature = np.concatenate((flip_feature,np.expand_dims(flip_feature_,axis=0)))
         np.save(flip_feature_fname,flip_feature)
+        print('gen flip dataset hook feature done')
     else:
         flip_feature_fname = None
     state_dict = torch.load(tmp_fname)
@@ -244,7 +229,7 @@ class COVIDDataset(Dataset):
         assert self.length != 0
         if self.use_ssl:
             self.feature, self.flip_feature = handle_feature('covid',self.data,ssl_ckpt_path,ssl_type,shortcut_type,shortcut_skew,transform,self.split,use_bias_label)
-            print(self.feature.shape)
+            print('feature shap:',self.feature.shape)
         else:
             self.flip_path_list = gen_flip_path_list(self.data)
 
@@ -253,7 +238,6 @@ class COVIDDataset(Dataset):
         return self.length
     
     def gen_image(self, path):
-
         return self.transform(Image.open(path))
 
     def handle_all_single_feature(self,index):
@@ -367,48 +351,3 @@ def get_dataset(args, dataset_split, transform_split, use_preprocess=None):
 
     return dataset
 
-def write_out_scalar(self,scalar_dict,step):
-    if self.args.tensorboard:
-        for key in scalar_dict.keys():
-            self.writer.add_scalar(key,scalar_dict[key],step)
-    if self.args.wandb:
-        wandb.log(scalar_dict,step=step)
-
-def get_class_info(dataset,shortcut_type,group_type,use_bias_label):
-
-    if use_bias_label:
-        if shortcut_type in ['mark','lightness','contrast','jpeg']:
-            return [f'{shortcut_type} {i+1}' for i in range(4)],shortcut_type.lower(),4
-        elif shortcut_type == 'LO':
-            return ['MIMIC','COVID'],'dataset',2
-        elif group_type == 'gender':
-            return ['Male','Female'],'gender',2
-        elif group_type == 'age':
-            return ['0~19y','20~39y','40~59y','60~79y','80y~'],'age',5
-        elif group_type == 'race':
-            return ['White','Black','Asian'],'race',3
-        else:
-            raise NotImplementedError
-    elif dataset in ['mimic','mimic_ssl']:
-        return ['No Finding','Lung Opacity','Cardiomegaly','Pleural Effusion'],'disease',4
-    elif dataset in ['covid','covid_ssl']:
-        return ['Normal','COVID','Lung_opacity','Viral Pneumonia'],'disease',4
-    else:
-        raise NotImplementedError
-  
-def write_out_cm(self,cm_name,label,pred):
-    if self.args.wandb:
-        if self.args.dataset in ['bar_ssl','bar']:
-            cm = plot.confusion_matrix(
-                y_true=label.tolist(),
-                preds=pred.tolist())
-        
-        else:
-
-            class_name,target_name,class_num = get_class_info(self.args.dataset,self.args.shortcut_type,self.args.group_type,self.args.use_bias_label)
-
-            cm = plot.confusion_matrix(
-                y_true=label.tolist(),
-                preds=pred.tolist(),
-                class_names=class_name)
-        wandb.log({cm_name: cm})

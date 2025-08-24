@@ -1,10 +1,11 @@
 ''' Modified from https://github.com/alinlab/LfF/blob/master/module/util.py '''
 
 import torch.nn as nn
-from module.resnet import resnet20
-from module.resnet_ import resnet18_wd4,resnet10
+import os
+from module.resnet1 import resnet20
+from module.resnet2 import resnet18_wd4,resnet10
 from module.mlp import *
-from torchvision.models import resnet18, resnet50, squeezenet1_1,mobilenet_v2
+from torchvision.models import resnet18, squeezenet1_1,mobilenet_v2
 from torchvision import models
 
 def get_model(model_tag, num_classes,num_channel,ssl_feature=512):
@@ -16,7 +17,6 @@ def get_model(model_tag, num_classes,num_channel,ssl_feature=512):
         model.fc = nn.Linear(128, num_classes)
 
     elif model_tag == "ResNet18":
- 
         print('bringing no pretrained resnet18 ...')
         #model = resnet18(pretrained=False)
         model = models.__dict__['resnet18'](num_classes=num_classes)
@@ -72,4 +72,14 @@ def get_model(model_tag, num_classes,num_channel,ssl_feature=512):
         )
     else:
         raise NotImplementedError
+    return model
+
+def get_vanilla_model(dataset,shortcut_type,shortcut_skew):
+
+    ckpt_path = os.path.join('result',dataset,f'{shortcut_type}{shortcut_skew}_vanilla','result','best_model.th')
+    assert os.path.exists(ckpt_path)
+    model = models.__dict__['resnet18'](num_classes=4)
+    model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+    model.load_state_dict(torch.load(ckpt_path)['state_dict'] )
+
     return model

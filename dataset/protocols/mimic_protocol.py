@@ -49,6 +49,7 @@ def _create_mark(label):
 mimic_marks = [_create_mark(i) for i in range(4)]
 
 def mark(raw_image, attribute_label):
+    
     shortcut = mimic_marks[attribute_label]
     img_shortcuted = np.zeros((1, 256, 256))
     img_shortcuted[0] = np.where(shortcut[0], np.full((256, 256), 255), raw_image[0])

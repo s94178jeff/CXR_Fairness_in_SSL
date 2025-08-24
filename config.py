@@ -21,13 +21,13 @@ def get_parser():
     parser.add_argument('--continue_train','-c', action='store_true', default=False,help='continue train.')
     parser.add_argument('--local','-l', action='store_true',help='not use wandb, tensorboard')
     # logging
-    parser.add_argument("--log_dir", help='path for saving model', default='./log', type=str)
+    parser.add_argument("--result_root", help='path for saving model', default='./result', type=str)
 
     # experiment
     parser.add_argument("--model", default='',type=str, help="model name")
     parser.add_argument("--method", default='vanilla',choices=['aug_vanilla','vanilla','fit'],type=str, help="train vanilla cnn or fit other")
     parser.add_argument("--shorTest", action="store_true", help="whether to train vanilla with shorcutTest")
     parser.add_argument("--ssl_ckpt_path", default='',type=str, help="ssl encoder path")
-    parser.add_argument("--ssl_type", default='',type=str,choices=['','simsiam','byol','simclr','dino','swav','vicreg'], help="ssl encoder path")
+    parser.add_argument("--ssl_type", default='',type=str,choices=['','simsiam','byol','simclr','dino','swav'], help="ssl encoder path")
     parser.add_argument('--use_bias_label', action='store_true',help='use for training on bias label')
     return parser

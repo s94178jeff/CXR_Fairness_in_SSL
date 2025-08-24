@@ -14,6 +14,8 @@ from dataset.protocols import (
     make_attr_labels,
     gen_mimic_shortcut,
     gen_covid_shortcut,
+    COVID_SHORTCUTS,
+    MIMIC_SHORTCUTS
 )
 
 # --- 常數 ---
@@ -22,11 +24,6 @@ join, exists = util.join, util.exists
 LUNG_OPACITY, MALE, FEMALE = 1, 0, 1
 MAX_RACE_GROUP, MAX_AGE_GROUP = 0, 3
 ROOT = Path(__file__).parent
-
-MIMIC_SHORTCUTS = ['no', 'jpeg', 'mark', 'contrast', 'lightness',
-                   'LO', 'Male', 'Female', 'Age', 'Gender', 'Race']
-COVID_SHORTCUTS = ['no', 'jpeg', 'mark', 'contrast', 'lightness']
-
 
 # --- 工具函數 ---
 def save_png(image, path: Path):
@@ -95,8 +92,8 @@ def covid_conversion(shortcut_type, shortcut_skew):
         shortcut_labels = make_attr_labels(torch.tensor(labels), 1 - shortcut_skew).tolist()
 
         for idx, path in tqdm(enumerate(path_list), total=len(path_list)):
-            if idx==100:
-                break
+            #if idx==100:
+            #    break
             path = Path(path)
             prefix = int(path.stem.split('-')[1])
             label, s_label = str(labels[idx]), shortcut_labels[idx]
@@ -131,7 +128,7 @@ def mimic_conversion(shortcut_type, shortcut_skew):
 
     for split in ['val', 'train', 'test']:
         split_ = 'valid' if split == 'val' else split
-        dataset = TFRecordDataset(f'mimic_dataset/mimic_{split_}_v5.tfrecords',
+        dataset = TFRecordDataset(f'dataset/mimic_dataset/mimic_{split_}_v5.tfrecords',
                                 index_path=None, description=description)
 
         labels = [info['Disease'][0] for info in dataset]
@@ -149,7 +146,7 @@ def mimic_conversion(shortcut_type, shortcut_skew):
         cnt = {}
         for i, info in tqdm(enumerate(dataset), total=len(labels)):
             if i == 100:
-                break
+               break
             label, s_label = info['Disease'][0], shortcut_labels[i]
             cnt[label] = cnt.get(label, 0) + 1
             name = f"{info['subject_id'][0]}_{info['study_id'][0]}"
@@ -158,7 +155,7 @@ def mimic_conversion(shortcut_type, shortcut_skew):
             save_path = mimic_root / split / str(label) / f'{save_name}.png'
 
             if not save_path.exists():
-                img = np.load(Path(f'mimic_dataset/{split_}/{name}.npy'))
+                img = np.load(Path(f'dataset/mimic_dataset/{split_}/{name}.npy'))
                 if shortcut_type in ['LO', 'Male', 'Female', 'Race', 'Age']:
                     if condition_setting(shortcut_type, split, label, info):
                         save_png(img, save_path)

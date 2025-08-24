@@ -9,15 +9,16 @@ import os
 from util import join,cal_img_bias_fairness,cal_demo_group_fairness,cal_label_bias_fairness_cnn,cal_label_bias_fairness_fit,\
     cal_demo_bias_demo_group_fairness_cnn,get_old_result,save_result,check_retrain,get_feature_num
 import torch.optim as optim
-from data_util import get_dataset,get_dataset_feature, IdxDataset, write_out_scalar, write_out_cm,IMAGE_SHORTCUT_TYPE,get_class_info
-from module_util import get_model
+from data_util import get_dataset,get_dataset_feature, IdxDataset,IMAGE_SHORTCUT_TYPE
+from module.util import get_model
 from sklearn.neighbors import KNeighborsClassifier
 from xgboost import XGBClassifier
 import random
 from importlib.machinery import SourceFileLoader
-from ssl_inference import get_epoch, get_aug
+from ssl_inference import get_ssl_info
 softmax = nn.Softmax(dim=1)
-from util import GROUP_LIST_,GROUP_LIST,METHOD_LIST,MATRIX_LIST,BIAS_LABEL_LIST,RESULT_ITEM, torch_safe_save, get_device, safe_roc_auc_score
+from util import GROUP_LIST_,GROUP_LIST,METHOD_LIST,MATRIX_LIST,BIAS_LABEL_LIST,RESULT_ITEM, torch_safe_save, get_device, safe_roc_auc_score, get_class_info\
+    ,write_out_scalar, write_out_cm
 from pathlib import Path
 
 class Learner(object):
@@ -45,8 +46,7 @@ class Learner(object):
             data2preprocess['covid'] = True
         run_name = f'{args.shortcut_type}{args.percent}_{args.method}'
         if args.ssl_type!='':
-            epoch = get_epoch(args.ssl_ckpt_path)
-            aug = get_aug(args.ssl_type,args.ssl_ckpt_path)
+            aug, epoch = get_ssl_info(args.ssl_ckpt_path)
             run_name = f'{args.ssl_type}_{args.shortcut_type}{args.percent}_ep{epoch}_{aug}_{args.method}'
         if args.exp != '':
             run_name = args.exp
@@ -79,7 +79,7 @@ class Learner(object):
         print(f'bias model: {self.model} || dataset: {args.dataset}')
         print(f'working with experiment: {run_name_title}...')
 
-        self.log_dir = os.makedirs(join(args.log_dir, args.dataset, run_name), exist_ok=True)
+        self.result_root = os.makedirs(join(args.result_root, args.dataset, run_name), exist_ok=True)
         self.device = get_device(args)
         print(f"Using device: {self.device}")
         self.args = args
@@ -87,18 +87,18 @@ class Learner(object):
         print(self.args)
 
         # logging directories
-        self.log_dir = join(args.log_dir, args.dataset, run_name)
+        self.result_root = join(args.result_root, args.dataset, run_name)
         use_bias_str = 'bias_label_' if args.use_bias_label else ''
-        self.result_dir = join(self.log_dir, f"{use_bias_str}result")
+        self.result_dir = join(self.result_root, f"{use_bias_str}result")
         if not args.use_bias_label or args.group_type not in ['age','race','gender']:
             check_retrain(self.result_dir,args.continue_train)
         os.makedirs(self.result_dir, exist_ok=True)
 
         feature_num = get_feature_num(args.ssl_type,args.ssl_ckpt_path,args.use_bias_label)
-        print('feature num ',feature_num)
+        if feature_num:
+            print('feature num ',feature_num)
         self.num_channel = 1 if args.dataset in ['mimic','covid'] else 3
         self.attr_idx = 1 if args.use_bias_label else 0
-        print('attr idx: ',self.attr_idx )
         self.valid_dataset = get_dataset(
             args,
             dataset_split="valid",
@@ -185,7 +185,7 @@ class Learner(object):
         # define model and optimizer
         self.model = get_model(self.model, self.num_classes, self.num_channel,ssl_feature=feature_num).to(self.device)
         init_lr = args.lr * self.batch_size / 256
-        print(init_lr)
+        print('lr: ' ,init_lr)
         self.optimizer = optim.Adam(
                 self.model.parameters(),
                 lr=init_lr,
@@ -300,8 +300,7 @@ class Learner(object):
         if best:
             state_dict[f'best_valid_acc'] = self.best_valid_acc
             state_dict[f'best_test_acc'] = self.best_test_acc
-        with open(model_path, "wb") as f:
-            torch_safe_save(state_dict,f)
+        torch_safe_save(state_dict,model_path)
         print(f'{step} model saved ...')
 
     def board_vanilla_loss(self, step, loss):

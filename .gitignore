@@ -3,7 +3,11 @@ dataset/COVID/
 dataset/MIMIC/
 dataset/covid_dataset/
 dataset/mimic_dataset/
-log/
+ssl_feature/
+result/
+tmp/
+test.ipynb
+feature/
 
 # =====================
 # macOS 系統檔案

@@ -8,6 +8,8 @@ from sklearn.metrics import confusion_matrix, roc_auc_score
 from itertools import combinations
 import json
 from pathlib import Path
+import wandb
+from wandb import plot
 softmax = nn.Softmax(dim=1)
 GROUP_LIST = ['age','race','gender']
 GROUP_LIST_ = ['age','race','gender','LO']
@@ -60,7 +62,6 @@ def get_feature_num(ssl_type,ssl_ckpt_path,use_bias_label):
         if arch=='resnet18':
             feature_num = 512
         else:
-            print(arch)
             raise NotImplementedError
     elif ssl_type == 'simclr':
         arch = ssl_ckpt_path.split('/')[-2].split('_')[0]
@@ -92,8 +93,6 @@ def get_feature_num(ssl_type,ssl_ckpt_path,use_bias_label):
             feature_num = 2048
         else:
             raise NotImplementedError
-    elif ssl_type == 'vicreg':
-        feature_num = 8192
     elif use_bias_label:
         feature_num = 512 #resnet18
     else:
@@ -217,16 +216,17 @@ def torch_safe_save(obj, path):
     path.parent.mkdir(parents=True, exist_ok=True)  # 建立資料夾（含父層）
     torch.save(obj, path)
 
-def get_device(args):
-    if getattr(args, "device", None) is None:
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        elif torch.backends.mps.is_available():
-            return torch.device("mps")
-        else:
-            return torch.device("cpu")
-    else:
+def get_device(args=None):
+
+    if args is not None and getattr(args, "device", None) is not None:
         return torch.device(args.device)
+
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
     
 def safe_roc_auc_score(y_true, y_score, default=0.5, **kwargs):
 
@@ -264,3 +264,47 @@ def check_retrain(log_path,continue_train):
         else:
             print('Type yes or no')
             exit()
+
+def get_class_info(dataset,shortcut_type,group_type,use_bias_label):
+
+    if use_bias_label:
+        if shortcut_type in ['mark','lightness','contrast','jpeg']:
+            return [f'{shortcut_type} {i+1}' for i in range(4)],shortcut_type.lower(),4
+        elif shortcut_type == 'LO':
+            return ['MIMIC','COVID'],'dataset',2
+        elif group_type == 'gender':
+            return ['Male','Female'],'gender',2
+        elif group_type == 'age':
+            return ['0~19y','20~39y','40~59y','60~79y','80y~'],'age',5
+        elif group_type == 'race':
+            return ['White','Black','Asian'],'race',3
+        else:
+            raise NotImplementedError
+    elif dataset in ['mimic','mimic_ssl']:
+        return ['No Finding','Lung Opacity','Cardiomegaly','Pleural Effusion'],'disease',4
+    elif dataset in ['covid','covid_ssl']:
+        return ['Normal','COVID','Lung_opacity','Viral Pneumonia'],'disease',4
+    else:
+        raise NotImplementedError
+
+def write_out_cm(self,cm_name,label,pred):
+    if self.args.wandb:
+        if self.args.dataset in ['bar_ssl','bar']:
+            cm = plot.confusion_matrix(
+                y_true=label.tolist(),
+                preds=pred.tolist())
+        else:
+            class_name,target_name,class_num = get_class_info(self.args.dataset,self.args.shortcut_type,self.args.group_type,self.args.use_bias_label)
+
+            cm = plot.confusion_matrix(
+                y_true=label.tolist(),
+                preds=pred.tolist(),
+                class_names=class_name)
+        wandb.log({cm_name: cm})
+
+def write_out_scalar(self,scalar_dict,step):
+    if self.args.tensorboard:
+        for key in scalar_dict.keys():
+            self.writer.add_scalar(key,scalar_dict[key],step)
+    if self.args.wandb:
+        wandb.log(scalar_dict,step=step)

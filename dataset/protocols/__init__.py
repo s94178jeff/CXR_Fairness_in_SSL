@@ -4,6 +4,9 @@ from .shortcut_util import (
     make_attr_labels,
     gen_mimic_shortcut,
     gen_covid_shortcut,
+    MIMIC_SHORTCUTS,
+    COVID_SHORTCUTS,
+    IMAGE_SHORTCUT_TYPE
 )
 
 __all__ = [
@@ -12,4 +15,7 @@ __all__ = [
     "make_attr_labels",
     "gen_mimic_shortcut",
     "gen_covid_shortcut",
+    "MIMIC_SHORTCUTS",
+    "COVID_SHORTCUTS",
+    "IMAGE_SHORTCUT_TYPE"
 ]

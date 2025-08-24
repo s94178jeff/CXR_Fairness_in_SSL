@@ -90,18 +90,3 @@ class bias_MLP(nn.Module):
                 return final_x, feat
             else:
                 return final_x
-
-class Noise_MLP(nn.Module):
-    def __init__(self, n_dim=16, n_layer=3):
-        super(Noise_MLP, self).__init__()
-
-        layers = []
-        for i in range(n_layer):
-            layers.append(nn.Linear(n_dim, n_dim))
-            layers.append(nn.LeakyReLU(0.2))
-
-        self.style = nn.Sequential(*layers)
-
-    def forward(self, z):
-        x = self.style(z)
-        return x

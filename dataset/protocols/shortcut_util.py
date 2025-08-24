@@ -3,6 +3,11 @@ import torch
 from .mimic_protocol import MIMIC_PROTOCOLS
 from .covid_protocol import COVID_PROTOCOLS
 
+DEFAULT_SHORTCUT = ['no']
+IMAGE_SHORTCUT_TYPE = ['mark','lightness','contrast','jpeg']
+MIMIC_SHORTCUTS = DEFAULT_SHORTCUT + IMAGE_SHORTCUT_TYPE + ['LO', 'Male', 'Female', 'Age', 'Gender', 'Race']
+COVID_SHORTCUTS = DEFAULT_SHORTCUT + IMAGE_SHORTCUT_TYPE
+
 # --- 生成屬性標籤 ---
 def make_attr_labels(target_labels, bias_aligned_ratio):
     num_classes = target_labels.max().item() + 1
