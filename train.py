@@ -17,7 +17,7 @@ if __name__ == '__main__':
     print('Training starts ...')
     
     if args.method in ['vanilla','aug_vanilla']:
-        learner.train_vanilla(args)
+        learner.train_vanilla()
     elif args.method == 'fit':
         learner.fit_other(args)
     else:

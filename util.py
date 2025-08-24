@@ -1,4 +1,3 @@
-'''Modified from https://github.com/alinlab/LfF/blob/master/util.py'''
 from tqdm import tqdm
 import torch
 import numpy as np
@@ -21,31 +20,6 @@ RESULT_ITEM = [f'{method}{bias_label}{item}' for item in MATRIX_LIST for bias_la
  + [f'{method}test_fair_group_{group}' for group in GROUP_LIST_ for method in METHOD_LIST] \
  + [f'{method}val_pair_info_group_{group}' for group in GROUP_LIST for method in METHOD_LIST] \
  + [f'{method}test_pair_info_group_{group}' for group in GROUP_LIST for method in METHOD_LIST]
-
-class EMA:
-    def __init__(self, label, num_classes:int, alpha=0.9):
-        self.label = label
-        self.alpha = alpha
-        self.parameter = torch.zeros(label.size(0))
-        self.updated = torch.zeros(label.size(0))
-        self.num_classes = num_classes
-        self.max = torch.zeros(self.num_classes).cuda()
-
-    def update(self, data, index, step, curve=None, iter_range=None):
-        self.parameter = self.parameter.to(data.device)
-        self.updated = self.updated.to(data.device)
-        index = index.to(data.device)
-
-        if curve is None:
-            self.parameter[index] = self.alpha * self.parameter[index] + (1 - self.alpha * self.updated[index]) * data
-        else:
-            alpha = curve ** -(step / iter_range)
-            self.parameter[index] = alpha * self.parameter[index] + (1 - alpha * self.updated[index]) * data
-        self.updated[index] = 1
-
-    def max_loss(self, label):
-        label_index = torch.where(self.label == label)[0]
-        return self.parameter[label_index].max()
 
 def join(*kwawrg):
     return os.path.join(*kwawrg)
@@ -218,15 +192,15 @@ def torch_safe_save(obj, path):
 
 def get_device(args=None):
 
-    if args is not None and getattr(args, "device", None) is not None:
-        return torch.device(args.device)
-
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        return torch.device("mps")
+    if args is None or getattr(args, "device", None) is None:
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            return torch.device("mps")
+        else:
+            return torch.device("cpu")
     else:
-        return torch.device("cpu")
+        return torch.device(args.device)
     
 def safe_roc_auc_score(y_true, y_score, default=0.5, **kwargs):
 
