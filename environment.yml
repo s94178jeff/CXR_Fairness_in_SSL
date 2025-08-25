@@ -1,0 +1,17 @@
+name: myenv4
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pytorch=2.7.1
+  - torchvision=0.22.0
+  - torchaudio=2.7.1
+  - scikit-learn
+  - numpy
+  - tqdm
+  - pip
+  - pip:
+      - wandb
+      - tfrecord
+      - xgboost
+      - requests
