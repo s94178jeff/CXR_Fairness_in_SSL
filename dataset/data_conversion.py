@@ -19,7 +19,7 @@ from dataset.protocols import (
 )
 
 # --- 常數 ---
-join, exists = util.join, util.exists
+join, path_exists = util.join_paths, util.path_exists
 
 LUNG_OPACITY, MALE, FEMALE = 1, 0, 1
 MAX_RACE_GROUP, MAX_AGE_GROUP = 0, 3

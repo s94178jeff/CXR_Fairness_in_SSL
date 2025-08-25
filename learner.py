@@ -7,7 +7,7 @@ import tempfile
 import random
 
 from util import (
-    join,
+    join_paths,
     cal_img_bias_fairness,
     cal_demo_group_fairness,
     cal_label_bias_fairness_cnn,
@@ -103,10 +103,10 @@ class Learner:
 
     def setup_dirs(self):
         args = self.args
-        self.result_root = join(args.result_root, args.dataset, self.run_name)
+        self.result_root = join_paths(args.result_root, args.dataset, self.run_name)
         Path(self.result_root).mkdir(parents=True, exist_ok=True)
         use_bias_str = "bias_label_" if args.use_bias_label else ""
-        self.result_dir = join(self.result_root, f"{use_bias_str}result")
+        self.result_dir = join_paths(self.result_root, f"{use_bias_str}result")
         if not args.use_bias_label or args.group_type not in ["age", "race", "gender"]:
             check_retrain(self.result_dir, args.continue_train)
         Path(self.result_dir).mkdir(parents=True, exist_ok=True)
@@ -143,14 +143,14 @@ class Learner:
     # ------------------------------
     # Loader helper
     # ------------------------------
-    def make_loader(self, dataset, shuffle=False):
+    def make_loader(self, dataset, shuffle=False, drop_last=False):
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
             shuffle=shuffle,
             num_workers=self.args.num_workers,
             pin_memory=self.device.type == "cuda",
-            drop_last=shuffle,
+            drop_last=drop_last,
         )
 
     # ------------------------------
@@ -158,7 +158,7 @@ class Learner:
     # ------------------------------
     def model_path(self, best=False):
         bias_str = f"{self.args.group_type}_" if self.args.use_bias_label and self.args.group_type in GROUP_LIST else ""
-        return join(self.result_dir, f"{bias_str}{'best_model.th' if best else 'final_model.th'}")
+        return join_paths(self.result_dir, f"{bias_str}{'best_model.th' if best else 'final_model.th'}")
 
     def load_vanilla(self, best=None):
         ckpt = torch.load(self.model_path(best), map_location=self.device)
@@ -235,7 +235,6 @@ class Learner:
             fairness = -1
         model.train()
         return acc, fairness, pair_info, (cat_label, cat_pred, cat_prob)
-
     # ------------------------------
     # Sanity check
     # ------------------------------

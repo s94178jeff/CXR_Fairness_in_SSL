@@ -13,7 +13,7 @@ from pathlib import Path
 vits = vision_transformer
 import torch.nn as nn
 import random
-from util import torch_safe_save, get_device
+from util import torch_safe_save, get_device, path_exists, join_paths
 def sample_unlabelled_images(bz,size):
     return torch.randn(bz, 1, size, size)
 
@@ -255,11 +255,11 @@ def generate_feature(dataset,img_path_list,ssl_ckpt_path,ssl_type,shortcut_type,
     ssl_shortcut_info = ssl_ckpt_path.rsplit("/",3)[-3]
     feature_dir = f'feature/ssl_feature/{dataset}/{ssl_type}/{shortcut_type}{shortcut_skew}/{ssl_shortcut_info}_{ssl_f_name}/ep{epoch}'
 
-    if not os.path.exists(feature_dir):
+    if not path_exists(feature_dir):
         os.makedirs(feature_dir)
-    feature_fname = os.path.join(feature_dir,f'{split}_ssl_features.npy')
+    feature_fname = join_paths(feature_dir,f'{split}_ssl_features.npy')
     flip_feature_fname = feature_fname.replace('_ssl','_flip_ssl')
-    if os.path.exists(feature_fname) :
+    if path_exists(feature_fname) :
         print(feature_fname)
         return feature_fname, flip_feature_fname
 

@@ -11,7 +11,7 @@ from PIL import Image,ImageFilter
 import json
 from tqdm import tqdm
 import random
-from util import join, exists, torch_safe_save, get_device
+from util import join_paths, path_exists, torch_safe_save, get_device
 from ssl_inference import generate_feature, gen_flip_path_list
 from dataset.data_conversion import covid_conversion, mimic_conversion
 from module.util import get_vanilla_model
@@ -42,10 +42,10 @@ class MimicDataset(Dataset):
         split = self.split.replace('valid','val')
         self.use_bias_label = use_bias_label
         self.use_ssl = True if ssl_ckpt_path != '' else False
-        print(join(root,f'{shortcut_type}{shortcut_skew}'))
-        if not exists(join(root,f'{shortcut_type}{shortcut_skew}')):
+        print(join_paths(root,f'{shortcut_type}{shortcut_skew}'))
+        if not path_exists(join_paths(root,f'{shortcut_type}{shortcut_skew}')):
             mimic_conversion(shortcut_type,shortcut_skew)
-        self.data = glob(join(root,f'{shortcut_type}{shortcut_skew}',split)+'/*/*')
+        self.data = glob(join_paths(root,f'{shortcut_type}{shortcut_skew}',split)+'/*/*')
         self.length = len(self.data)
         if self.use_ssl:
             self.feature, self.flip_feature = handle_feature('mimic',self.data,ssl_ckpt_path,ssl_type,shortcut_type,shortcut_skew,transform,self.split,use_bias_label)
@@ -98,7 +98,7 @@ def get_dataset_feature(args,split):
     root = f'dataset/{args.dataset.split("_")[0].upper()}/'
     split_ = split.replace('valid','val')
 
-    paths = glob(join(root,f'{args.shortcut_type}{args.percent}',split_)+'/*/*_*_*')
+    paths = glob(join_paths(root,f'{args.shortcut_type}{args.percent}',split_)+'/*/*_*_*')
     assert paths != 0
     attrs = [np.array([int(path.split('_')[-2])]) for path in paths ]
     print(f"dataset/mimic_dataset/{split.replace('_flip','')}/summary.json")
@@ -163,11 +163,11 @@ def batch_hook_feature(model, img_path_list, transforms, bz=32, return_numpy=Tru
 def gen_hook_feature(dataset,img_path_list,shortcut_type,shortcut_skew,transforms,split):
 
     feature_dir = f'feature/vanilla_hook_feature/{dataset}/{shortcut_type}{shortcut_skew}'
-    if not os.path.exists(feature_dir):
+    if not path_exists(feature_dir):
         os.makedirs(feature_dir)
-    feature_fname = os.path.join(feature_dir,f'{split}_features.npy')
+    feature_fname = join_paths(feature_dir,f'{split}_features.npy')
     flip_feature_fname = feature_fname.replace('_features','_flip_features')
-    if os.path.exists(feature_fname) :
+    if path_exists(feature_fname) :
         print(feature_fname)
         return feature_fname, flip_feature_fname
     
@@ -222,9 +222,9 @@ class COVIDDataset(Dataset):
         split = self.split.replace('valid','val')
         self.use_bias_label = use_bias_label
         self.use_ssl = True if ssl_ckpt_path != '' else False
-        if not exists(join(root,f'{shortcut_type}{shortcut_skew}')):
+        if not path_exists(join_paths(root,f'{shortcut_type}{shortcut_skew}')):
             covid_conversion(shortcut_type,shortcut_skew)
-        self.data = glob(join(root,f'{shortcut_type}{shortcut_skew}',split)+'/*/*_*_*')
+        self.data = glob(join_paths(root,f'{shortcut_type}{shortcut_skew}',split)+'/*/*_*_*')
         self.length = len(self.data)
         assert self.length != 0
         if self.use_ssl:

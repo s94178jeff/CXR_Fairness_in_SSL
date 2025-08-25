@@ -3,6 +3,7 @@ dataset/COVID/
 dataset/MIMIC/
 dataset/covid_dataset/
 dataset/mimic_dataset/
+dataset/dataset.zip
 ssl_feature/
 result/
 tmp/
